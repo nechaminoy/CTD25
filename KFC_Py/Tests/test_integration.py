@@ -10,7 +10,7 @@ from Physics import IdlePhysics, JumpPhysics
 from Graphics import Graphics
 from GraphicsFactory import MockImgFactory
 from mock_img import MockImg
-
+from bus import EventBus
 
 # ---------------------------------------------------------------------------
 # Helper utilities – these rely **only on production code**, no test doubles
@@ -82,7 +82,7 @@ def _load_pieces_and_board():
                     continue
                 pieces.append(_simple_piece(cell_code, (row_idx, col_idx), board))
 
-    game = Game(pieces, board)
+    game = Game(pieces, board, EventBus())
     return game
 
 

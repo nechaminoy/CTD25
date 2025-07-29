@@ -1,5 +1,10 @@
 import pathlib
 from Board import Board
+from overlay_manager import subscribe_to_events_overlay
+from sound_handler import subscribe_to_events_sound_play, init_mixer
+from score_handler import subscribe_to_events_capture
+from move_history import subscribe_to_events
+from bus import EventBus
 from PieceFactory import PieceFactory
 from Game import Game
 from GraphicsFactory import GraphicsFactory
@@ -14,13 +19,15 @@ def create_game(pieces_root: str | pathlib.Path, img_factory) -> Game:
     (or loads board.png if present), instantiates every piece via PieceFactory
     and returns a ready-to-run *Game* instance.
     """
-    pieces_root = pathlib.Path(pieces_root)
-    board_csv = pieces_root / "board.csv"
+    root = pathlib.Path(pieces_root)
+    if not root.is_absolute():
+        root = (pathlib.Path(__file__).resolve().parent / root).resolve()
+    board_csv = root / "board.csv"
     if not board_csv.exists():
         raise FileNotFoundError(board_csv)
 
     # Board image: use board.png beside this file if present, else blank RGBA
-    board_png = pieces_root / "board.png"
+    board_png = root / "board.png"
     if not board_png.exists():
         raise FileNotFoundError(board_png)
 
@@ -40,4 +47,10 @@ def create_game(pieces_root: str | pathlib.Path, img_factory) -> Game:
                 if code:
                     pieces.append(pf.create_piece(code, (r, c)))
 
-    return Game(pieces, board) 
+    event_bus = EventBus()
+    subscribe_to_events(event_bus)
+    subscribe_to_events_capture(event_bus)
+    subscribe_to_events_sound_play(event_bus)
+    init_mixer()
+    subscribe_to_events_overlay(event_bus)
+    return Game(pieces, board, event_bus)

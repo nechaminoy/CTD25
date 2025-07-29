@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv, json, pathlib
 from plistlib import InvalidFileException
 from typing import Dict, Tuple
+from pathlib import Path
 
 from Board import Board
 from Command import Command
@@ -23,7 +24,10 @@ class PieceFactory:
         self.board = board
         self.graphics_factory = graphics_factory or GraphicsFactory()
         self.physics_factory = physics_factory or PhysicsFactory(board)
-        self._pieces_root = pieces_root
+        root = Path(pieces_root)
+        if not root.is_absolute():
+            root = (Path(__file__).resolve().parent / root).resolve()
+        self._pieces_root = root
 
     # ──────────────────────────────────────────────────────────────
     @staticmethod

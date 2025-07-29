@@ -1,4 +1,3 @@
-
 import logging
 from GameFactory import create_game
 from GraphicsFactory import ImgFactory

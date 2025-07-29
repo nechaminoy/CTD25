@@ -11,6 +11,8 @@ from Graphics import Graphics
 from GraphicsFactory import MockImgFactory
 from img import Img
 from Moves import Moves
+from bus import event_bus
+
 
 ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
 PIECES_DIR = ROOT_DIR / "pieces"
@@ -123,12 +125,12 @@ def test_game_initialization_validation():
     # Valid game needs both kings
     white_king = _make_piece("KW_1", (7, 4), board)
     black_king = _make_piece("KB_1", (0, 4), board)
-    game = Game([white_king, black_king], board)
+    game = Game([white_king, black_king], board, event_bus)
     assert isinstance(game, Game)
     
     # Missing black king
     try:
-        Game([white_king], board)
+        Game([white_king], board, event_bus)
         assert False, "Should raise InvalidBoard"
     except InvalidBoard:
         pass
@@ -137,31 +139,37 @@ def test_game_initialization_validation():
     try:
         piece1 = _make_piece("PW_1", (4, 4), board)
         piece2 = _make_piece("PW_2", (4, 4), board)
-        Game([white_king, black_king, piece1, piece2], board)
+        Game([white_king, black_king, piece1, piece2], board, event_bus)
         assert False, "Should raise InvalidBoard"
     except InvalidBoard:
         pass
 
 
 def test_game_collision_resolution():
-    """Test piece capture mechanics."""
     board = _board()
-    
-    # Setup pieces
+
+    # Setup pieces – no overlap at initial placement
     white_king = _make_piece("KW_1", (7, 4), board)
     black_king = _make_piece("KB_1", (0, 4), board)
     pawn1 = _make_piece("PW_1", (4, 4), board)
-    pawn2 = _make_piece("PB_1", (4, 4), board)  # Same cell as pawn1
-    
-    game = Game([white_king, black_king, pawn1, pawn2], board)
-    
-    # Most recent piece wins collision
-    pawn1.state.physics._start_ms = 100  # Earlier arrival
-    pawn2.state.physics._start_ms = 200  # Later arrival
-    
+    pawn2 = _make_piece("PB_1", (4, 5), board)  # different cell initially
+
+    game = Game([white_king, black_king, pawn1, pawn2], board, event_bus)
+
+    # Create an overlap AFTER initialization to simulate a post-start collision
+    pawn1.state.reset(Command(0, pawn1.id, "idle", [(4, 4)]))
+    pawn2.state.reset(Command(0, pawn2.id, "idle", [(4, 4)]))
+
+    # The most recent arrival wins the collision
+    pawn1.state.physics._start_ms = 100  # earlier
+    pawn2.state.physics._start_ms = 200  # later
+
+    # Update the cell→pieces map before resolving collisions
+    game._update_cell2piece_map()
     game._resolve_collisions()
-    assert pawn2 in game.pieces  # Winner
-    assert pawn1 not in game.pieces  # Captured
+
+    assert pawn2 in game.pieces      # winner remains
+    assert pawn1 not in game.pieces  # captured is removed
 
 
 def test_game_keyboard_input():
@@ -171,7 +179,7 @@ def test_game_keyboard_input():
     # Setup minimal game
     white_king = _make_piece("KW_1", (7, 4), board)
     black_king = _make_piece("KB_1", (0, 4), board)
-    game = Game([white_king, black_king], board)
+    game = Game([white_king, black_king], board, event_bus)
     
     # Queue a move command
     cmd = Command(game.game_time_ms(), white_king.id, "move", [(7, 4), (6, 4)])

@@ -49,8 +49,8 @@ def test_can_capture_opponent_color():
     assert white_pawn.current_cell() == (3, 1), f"White pawn should be at (3,1) but is at {white_pawn.current_cell()}"
     
     # Black pawn should be captured (removed from game)
-    assert black_pawn not in game.pieces, "Black pawn should be captured"
-    
+    assert all(p.id != black_pawn.id for p in game.pieces), "Black pawn should be captured"
+
     # Total pieces should be reduced by 1
     assert len(game.pieces) == initial_pieces_count - 1, "One piece should be captured"
 
