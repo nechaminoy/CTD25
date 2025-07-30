@@ -35,7 +35,8 @@ class Game(PublisherMixin):
         self.pos: Dict[Tuple[int, int], List[Piece]] = defaultdict(list)
         self.START_NS = time.monotonic_ns()
         self._time_factor = 1
-        self._validate_initial_setup()
+        if validate_setup:
+            self._validate_initial_setup()
         self._deferred_after_cooldown = {}
         self.kp1: Optional[KeyboardProcessor] = None
         self.kp2: Optional[KeyboardProcessor] = None
