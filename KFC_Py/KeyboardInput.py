@@ -1,6 +1,8 @@
 import threading, logging
 import keyboard  # pip install keyboard
 from Command import Command
+import asyncio
+
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +67,7 @@ class KeyboardProcessor:
 
 class KeyboardProducer(threading.Thread):
 
-    def __init__(self, game, queue, processor: KeyboardProcessor, player: int):
+    def __init__(self, game, queue, processor: KeyboardProcessor, player: int, send_command=None):
         super().__init__(daemon=True)
         self.game = game
         self.queue = queue
@@ -75,6 +77,18 @@ class KeyboardProducer(threading.Thread):
         self.selected_cell = None
         # Define which color each player controls
         self.my_color = "W" if player == 1 else "B"
+        self._send_cmd = send_command
+
+    def set_sender(self, fn):
+        self._send_cmd = fn
+
+    def _emit(self, cmd: Command):
+        if self._send_cmd is None:
+            return
+        if asyncio.iscoroutinefunction(self._send_cmd):
+            asyncio.get_running_loop().create_task(self._send_cmd(cmd))
+        else:
+            self._send_cmd(cmd)
 
     def run(self):
         # Install our hook; it stays active until we call keyboard.unhook_all()

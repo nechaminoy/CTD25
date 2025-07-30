@@ -47,6 +47,8 @@ class Game(PublisherMixin):
         self.last_cursor2 = (0, 0)
         self._window_ready = False
         self._did_reset = False
+        self.state_version = 0
+        self._snapshot_dirty = True
         if validate_setup:
             self._validate_initial_setup()
 
@@ -87,6 +89,33 @@ class Game(PublisherMixin):
         self.kb_prod_1.start()
         self.kb_prod_2.start()
 
+    def snapshot(self) -> dict:
+        return {
+            "version": self.state_version,
+            "pieces": [
+                {
+                    "id": p.id,
+                    "cell": p.current_cell(),
+                    "color": p.id[1],
+                    "state": p.state.name,
+                }
+                for p in self.pieces
+            ],
+        }
+
+    def _bump_version(self) -> None:
+        self.state_version += 1
+        self._snapshot_dirty = True
+
+    def _publish_snapshot(self) -> None:
+        payload = self.snapshot()
+        self.publish_event(
+            et=EventType.STATE_SNAPSHOT,
+            timestamp=self.game_time_ms(),
+            **payload
+        )
+        self._snapshot_dirty = False
+
     # ──────────────────────────────────────────────────────────────
     def _update_cell2piece_map(self):
         self.pos.clear()
@@ -99,6 +128,7 @@ class Game(PublisherMixin):
             for p in self.pieces:
                 p.reset(start_ms)
             self._did_reset = True
+            self._snapshot_dirty = True
         it_counter = 0
         prev_now = -1
         while not self._is_win():
@@ -134,6 +164,8 @@ class Game(PublisherMixin):
                     to_cell = pending_cmd.params[1] if len(pending_cmd.params) > 1 else after
 
                     if (from_cell != to_cell) or (len(pending_cmd.params) > 1):
+                        self._bump_version()
+                        logging.debug("state_version=%s", self.state_version)
                         self.publish_event(
                             et=EventType.PIECE_MOVED,
                             timestamp=pending_cmd.timestamp,
@@ -151,6 +183,9 @@ class Game(PublisherMixin):
 
             # 4) resolve collisions based on the fresh board state
             self._resolve_collisions()
+
+            if self._snapshot_dirty:
+                self._publish_snapshot()
 
             # 5) render (optional)
             if is_with_graphics:
@@ -283,6 +318,8 @@ class Game(PublisherMixin):
         # Publish PIECE_MOVED only if a real square change happened
         #   OR if caller explicitly supplied both from/to (to keep their intent).
         if (from_cell != to_cell) or (len(cmd.params) > 1):
+            self._bump_version()
+            logging.debug("state_version=%s", self.state_version)
             self.publish_event(
                 et=EventType.PIECE_MOVED,
                 timestamp=cmd.timestamp,  # wall-clock-ish for ordering
@@ -365,6 +402,7 @@ class Game(PublisherMixin):
                     continue
 
                 # ---- opponents: perform real capture and publish events ----
+                self._bump_version()
                 logger.info(f"CAPTURE: {winner.id} captures {p.id} at {cell}")
                 self.publish_event(
                     et=EventType.CAPTURE,
@@ -381,6 +419,8 @@ class Game(PublisherMixin):
 
             # physically remove losers from the game state
             # NEW — remove by identity, keep indices stable, and drop from lookup
+            if to_remove and not any(evt for evt in []):
+                self._bump_version()
             for p in to_remove:
                 pid = p.id
                 self.pieces = [x for x in self.pieces if x.id != pid]

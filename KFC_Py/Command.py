@@ -7,6 +7,7 @@ class Command:
     piece_id: str
     type: str               # "move" | "jump" | …
     params: List            # payload (e.g. ["e2", "e4"])
+    cmd_id: Optional[str] = None
 
     def __str__(self) -> str:
         return f"Command(timestamp={self.timestamp}, piece_id={self.piece_id}, type={self.type}, params={self.params})"

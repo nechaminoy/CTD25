@@ -26,6 +26,11 @@ class EventType(str, Enum):
     PIECE_DROPPED  = "piece_dropped"
     TIMER_TICK     = "timer_tick"
 
+    STATE_SNAPSHOT = "state_snapshot"
+    ASSIGN_PLAYER = "assign_player"
+    ILLEGAL_COMMAND = "illegal_command"
+    COMMAND_RESULT = "command_result"
+
 
 @dataclass(frozen=True)
 class Event:
