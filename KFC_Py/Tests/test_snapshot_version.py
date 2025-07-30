@@ -26,6 +26,7 @@ async def test_snapshot_version_increments_on_move():
 
     srv = asyncio.create_task(serve(game, host="127.0.0.1", port=8791))
     await asyncio.sleep(0.05)
+
     try:
         c = await WSClient("ws://127.0.0.1:8791").connect(player="W")
 
