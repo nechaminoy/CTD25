@@ -6,6 +6,8 @@ from client.ws_client import WSClient
 from server.ws_server import serve
 from event import EventType
 
+from Tests.test_ws_server_ticker import wait_snapshot_gt
+
 PIECES_DIR = pathlib.Path(__file__).parent.parent.parent / "pieces"
 
 async def next_of_type(client, typ, timeout=2.0):
@@ -40,7 +42,7 @@ async def test_snapshot_version_increments_on_move():
 
         game._run_game_loop(num_iterations=160, is_with_graphics=False)
 
-        snap1 = await next_of_type(c, EventType.STATE_SNAPSHOT)
+        snap1 = await wait_snapshot_gt(c, v0, timeout=2.0)
         v1 = snap1.payload["version"]
         assert v1 == v0 + 1
     finally:

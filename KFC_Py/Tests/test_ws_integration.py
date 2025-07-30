@@ -35,8 +35,14 @@ async def test_ws_two_clients_receive_same_event():
     await asyncio.sleep(0.05)
 
     try:
-        c1 = await WSClient("ws://127.0.0.1:8765").connect(player="W")
-        c2 = await WSClient("ws://127.0.0.1:8765").connect(player="B")
+        import socket
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            free_port = s.getsockname()[1]
+
+        srv_task = asyncio.create_task(serve(game, host="127.0.0.1", port=free_port))
+        c1 = await WSClient(f"ws://127.0.0.1:{free_port}").connect(player="W")
+        c2 = await WSClient(f"ws://127.0.0.1:{free_port}").connect(player="B")
         await asyncio.sleep(0.02)
 
         pw = game.pos[(6, 0)][0]

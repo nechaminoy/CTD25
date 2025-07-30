@@ -22,14 +22,14 @@ class ClientRenderer:
         
         # Ensure board image is loaded
         if self._board.img is None:
+            board_png = self._pieces_root / "board.png"
             logging.info("Loading initial board image")
             board_img = self._gfx_factory._img_factory(
-                str(self._pieces_root / "board.png"),
+                str(board_png),
                 (self._board.W_cells * self._board.cell_W_pix,
                  self._board.H_cells * self._board.cell_H_pix),
                 keep_aspect=False
             )
-            self._board = board_img
 
     @staticmethod
     def _type_name(piece_id: str) -> str:
@@ -66,26 +66,23 @@ class ClientRenderer:
             return
             
         canvas = self._board.img.copy()
-        pieces = payload.get("pieces", [])
-        # logging.debug(f"Rendering snapshot with {len(pieces)} pieces")
-
-        for p in pieces:
-            pid = p["id"]
+        for p in payload.get("pieces", []):
             cell = tuple(p["cell"]) if isinstance(p.get("cell"), (list, tuple)) else p.get("cell")
             if cell is None:
                 continue
             x_m, y_m = self._board.cell_to_m(cell)
             x_px, y_px = self._board.m_to_pix((x_m, y_m))
-
-            sprite = self._sprite(self._type_name(pid)).get_img()
+            sprite = self._sprite(self._type_name(p["id"])).get_img()
             sprite.draw_on(canvas, x_px, y_px)
 
-        self._board.img = canvas
         bg = board_img.copy()
-        x0 = (bg.W - canvas.W) // 2
-        y0 = (bg.H - canvas.H) // 2
-        canvas.draw_on(bg, x0, y0)
+        H_bg, W_bg = bg.img.shape[:2]
+        H_cv = self._board.H_cells * self._board.cell_H_pix
+        W_cv = self._board.W_cells * self._board.cell_W_pix
+        x0 = (W_bg - W_cv) // 2
+        y0 = (H_bg - H_cv) // 2
 
+        canvas.draw_on(bg, x0, y0)
         self._frame = bg.img
 
     def frame(self):
