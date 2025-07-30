@@ -1,4 +1,5 @@
 import pathlib
+import logging
 from Board import Board
 from overlay_manager import subscribe_to_events_overlay
 from sound_handler import subscribe_to_events_sound_play, init_mixer
@@ -33,7 +34,11 @@ def create_game(pieces_root: str | pathlib.Path, img_factory) -> Game:
 
     loader = img_factory
 
-    board_img = loader(board_png, (CELL_PX*8, CELL_PX*8), keep_aspect=False)
+    # Calculate board dimensions
+    board_w = CELL_PX * 8
+    board_h = CELL_PX * 8
+    logging.debug(f"Creating board with dimensions: {board_w}x{board_h}")
+    board_img = loader(board_png, (board_w, board_h), keep_aspect=False)
 
     board = Board(CELL_PX, CELL_PX, 8, 8, board_img)
 

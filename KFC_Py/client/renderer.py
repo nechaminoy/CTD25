@@ -1,8 +1,10 @@
 # KFC_Py/client/renderer.py
 from __future__ import annotations
+import logging
 from typing import Dict, Any, Tuple
 from pathlib import Path
 
+from canvas import board_img  
 from Board import Board
 from GraphicsFactory import GraphicsFactory, ImgFactory
 from Graphics import Graphics
@@ -17,6 +19,17 @@ class ClientRenderer:
         self._pieces_root = Path(pieces_root)
         self._gfx_factory = GraphicsFactory(img_factory or ImgFactory())
         self._cache: Dict[str, Graphics] = {}  # key: "PW"/"KB"/...
+        
+        # Ensure board image is loaded
+        if self._board.img is None:
+            logging.info("Loading initial board image")
+            board_img = self._gfx_factory._img_factory(
+                str(self._pieces_root / "board.png"),
+                (self._board.W_cells * self._board.cell_W_pix,
+                 self._board.H_cells * self._board.cell_H_pix),
+                keep_aspect=False
+            )
+            self._board = board_img
 
     @staticmethod
     def _type_name(piece_id: str) -> str:
@@ -36,8 +49,25 @@ class ClientRenderer:
         return g
 
     def render_snapshot(self, payload: Dict[str, Any]) -> None:
+        if self._board.img is None:
+            # Try to reload both background and board images
+            logging.warning("Board image is None, attempting to reload")
+            
+            # Load background first
+            bg_path = str(Path(__file__).resolve().parent.parent.parent / "table_bg_13in.png")
+            if Path(bg_path).exists():
+                self._board.img = self._gfx_factory._img_factory(bg_path, (1920, 1080))
+            else:
+                logging.error(f"Background image not found at {bg_path}")
+                return
+            
+        if self._board.img is None:
+            logging.error("Failed to load board image")
+            return
+            
         canvas = self._board.img.copy()
         pieces = payload.get("pieces", [])
+        # logging.debug(f"Rendering snapshot with {len(pieces)} pieces")
 
         for p in pieces:
             pid = p["id"]
@@ -51,6 +81,17 @@ class ClientRenderer:
             sprite.draw_on(canvas, x_px, y_px)
 
         self._board.img = canvas
+        bg = board_img.copy()
+        x0 = (bg.W - canvas.W) // 2
+        y0 = (bg.H - canvas.H) // 2
+        canvas.draw_on(bg, x0, y0)
+
+        self._frame = bg.img
 
     def frame(self):
-        return self._board.img
+        if self._board.img is None:
+            # logging.error("Board image is None in frame()")
+            return None
+        # logging.debug(f"Returning board image with shape {self._board.img.img.shape}")
+        # return getattr(self._board.img, "img", self._board.img)
+        return getattr(self, "_frame", self._board.img.img)

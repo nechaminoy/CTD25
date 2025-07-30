@@ -1,5 +1,6 @@
 # KFC_Py/client/display.py
 from __future__ import annotations
+import logging
 from typing import Optional
 
 class NullDisplay:
@@ -17,12 +18,18 @@ class Cv2Display:
 
     def present(self, img):
         if img is None:
+            logging.error("Display received None image")
             return
+        
+        # logging.debug(f"Display presenting image with shape {img.shape} and dtype {img.dtype}")
+        
         if img.ndim == 3 and img.shape[2] == 4:
+            logging.debug("Converting BGRA to BGR")
             bgr = self.cv2.cvtColor(img, self.cv2.COLOR_BGRA2BGR)
             self.cv2.imshow(self.window_name, bgr)
         else:
             self.cv2.imshow(self.window_name, img)
+        
         self.cv2.waitKey(1)
 
     def close(self):

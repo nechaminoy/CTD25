@@ -1,5 +1,6 @@
 # KFC_Py/client/render_loop.py
 from __future__ import annotations
+import logging
 import asyncio
 import contextlib
 
@@ -25,6 +26,12 @@ class ClientRenderLoop:
                 # pull the current frame from the renderer (side effects update the board image)
                 frame = self.renderer.frame()
                 self.frames += 1
+                
+                # if frame is None:
+                #     logging.error("Renderer returned None frame")
+                # else:
+                #     logging.debug(f"Got frame from renderer: shape={frame if hasattr(frame, 'shape') else 'no shape'}")
+                
                 if self.display is not None:
                     self.display.present(frame)
                 # yield control at a steady cadence

@@ -14,5 +14,5 @@ class EventBridge:
             self._task = asyncio.create_task(self._run())
 
     async def _run(self):
-        async for evt in self._ws.events():   # evt הוא Event מ-event_from_json
+        async for evt in self._ws.events():   
             self._bus.publish(evt)
