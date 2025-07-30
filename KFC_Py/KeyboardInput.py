@@ -180,3 +180,11 @@ class KeyboardProducer(threading.Thread):
 
     def stop(self):
         keyboard.unhook_all()
+
+
+class ToWSQueue:
+    def __init__(self, ws_client):
+        self.ws = ws_client
+    def put(self, cmd):
+        import asyncio
+        asyncio.create_task(self.ws.send_command(cmd))

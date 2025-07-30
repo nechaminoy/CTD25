@@ -6,7 +6,7 @@ from client.render_loop import ClientRenderLoop
 from client.renderer import ClientRenderer
 from client.ui_state_sync import BoardMirror, subscribe_state_sync, subscribe_render
 from config.settings import PIECES_DIR, WS_HOST, WS_PORT, WS_URI
-from config.input_maps import P1_MAP
+from config.input_maps import P1_MAP, P2_MAP
 
 async def run_local():
     game = create_game(PIECES_DIR, ImgFactory())
@@ -23,7 +23,22 @@ async def run_client():
     from KeyboardInput import KeyboardProducer, KeyboardProcessor
 
     game = create_game(PIECES_DIR, ImgFactory())
-    ws = await WSClient(WS_URI).connect()
+    player = os.getenv("PLAYER", "W")
+    ws = await WSClient(WS_URI).connect(player=player)
+
+    class _ToWSQueue:
+        def __init__(self, ws_client):
+            self.ws = ws_client
+
+        def put(self, cmd):
+            asyncio.create_task(self.ws.send_command(cmd))
+
+    player_num = 1 if player == "W" else 2
+    keymap = P1_MAP if player_num == 1 else P2_MAP
+    kp = KeyboardProcessor(8, 8, keymap)
+    kb = KeyboardProducer(game, _ToWSQueue(ws), kp, player=player_num)
+    kb.start()
+
     EventBridge(ws, game.bus).start()
     renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory())
     subscribe_render(game.bus, renderer)
