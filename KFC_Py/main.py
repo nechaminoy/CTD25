@@ -1,6 +1,10 @@
 import os, asyncio, logging
 from GameFactory import create_game
 from GraphicsFactory import ImgFactory, MockImgFactory
+from client.display import NullDisplay, Cv2Display
+from client.render_loop import ClientRenderLoop
+from client.renderer import ClientRenderer
+from client.ui_state_sync import BoardMirror, subscribe_state_sync, subscribe_render
 from config.settings import PIECES_DIR, WS_HOST, WS_PORT, WS_URI
 from config.input_maps import P1_MAP
 
@@ -9,9 +13,9 @@ async def run_local():
     game.run()
 
 async def run_server():
-    from server.ws_server import serve
+    from server.ws_server import serve_and_tick
     game = create_game(PIECES_DIR, MockImgFactory())
-    await serve(game, host=WS_HOST, port=WS_PORT)
+    await serve_and_tick   (game, host=WS_HOST, port=WS_PORT)
 
 async def run_client():
     from client.ws_client import WSClient
@@ -21,16 +25,28 @@ async def run_client():
     game = create_game(PIECES_DIR, ImgFactory())
     ws = await WSClient(WS_URI).connect()
     EventBridge(ws, game.bus).start()
+    renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory())
+    subscribe_render(game.bus, renderer)
 
-    kp = KeyboardProcessor(game.board.H_cells, game.board.W_cells, P1_MAP, initial_pos=(7, 0))
-    kb = KeyboardProducer(game, game.user_input_queue, kp, player=1, send_command=ws.send_command)
-    kb.start()
+    mirror = BoardMirror()
+    subscribe_state_sync(game.bus, mirror)
+    renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory())
+    subscribe_render(game.bus, renderer)
+
+    headless = os.getenv("KFC_HEADLESS", "0") == "1"
+    display = NullDisplay() if headless else Cv2Display("Kung Fu Chess")
+
+    render_loop = ClientRenderLoop(renderer, hz=60.0, display=display)
+    render_loop.start()
 
     try:
         while True:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.1)
     except KeyboardInterrupt:
         pass
+    finally:
+        await render_loop.stop()
+        display.close()
 
 async def main():
     logging.basicConfig(level=logging.DEBUG,

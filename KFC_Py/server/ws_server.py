@@ -1,6 +1,4 @@
-import asyncio, websockets
-import json
-import logging
+import asyncio, websockets, json, logging, contextlib  # ← הוספנו contextlib
 
 from websockets.server import WebSocketServerProtocol
 from typing import Set
@@ -111,3 +109,41 @@ async def serve(game, host="127.0.0.1", port=8765):
     hub = WSHub(game.bus, game.user_input_queue.put, loop, game)
     async with websockets.serve(hub.handler, host, port):
         await asyncio.Future()
+
+async def _game_ticker(game, hz: float = 60.0):
+    """Run the game loop on the server side without graphics."""
+    dt = 1.0 / hz
+    while True:
+        try:
+            game._run_game_loop(num_iterations=1, is_with_graphics=False)
+        except Exception:
+            logging.exception("game tick failed")
+        await asyncio.sleep(dt)
+
+async def serve_and_tick(game, host="127.0.0.1", port=8765, *, hz: float = 60.0):
+    """
+    Start WS hub and run the game loop ticker concurrently.
+    """
+    loop = asyncio.get_running_loop()
+    hub = WSHub(game.bus, game.user_input_queue.put, loop, game)
+    sleep_dt = 0.0 if not hz or hz <= 0 else 1.0 / hz
+    async def _ticker():
+        try:
+            while True:
+                game._run_game_loop(num_iterations=1, is_with_graphics=False)
+                if sleep_dt > 0:
+                    await asyncio.sleep(sleep_dt)
+                else:
+                    await asyncio.sleep(0)
+        except asyncio.CancelledError:
+            pass
+
+    async with websockets.serve(hub.handler, host, port):
+        ticker_task = asyncio.create_task(_ticker())
+        try:
+            await asyncio.Future()
+        finally:
+            ticker_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await ticker_task
+
