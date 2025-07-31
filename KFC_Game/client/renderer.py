@@ -13,11 +13,13 @@ class ClientRenderer:
     Render snapshot payloads onto the board image.
     Caches per‑piece‑type sprites (idle) at board cell size.
     """
-    def __init__(self, board: Board, pieces_root: Path, img_factory=None):
+    def __init__(self, board: Board, pieces_root: Path, img_factory=None, player_num: int = None, keyboard_processor=None):
         self._board = board
         self._pieces_root = Path(pieces_root)
         self._gfx_factory = GraphicsFactory(img_factory or ImgFactory())
         self._cache: Dict[str, Graphics] = {}  # key: "PW"/"KB"/...
+        self._player_num = player_num  # Current player number (1 for White, 2 for Black)
+        self._keyboard_processor = keyboard_processor  # Reference to local keyboard processor for cursor
         
         # Ensure board image is loaded
         if self._board.img is None:
@@ -36,6 +38,17 @@ class ClientRenderer:
     def _type_name(piece_id: str) -> str:
         # IDs look like "PW_1", "KB_3", ...
         return piece_id.split("_", 1)[0]
+
+    def set_player_num(self, player_num: int) -> None:
+        """Set the current player number (1 for White, 2 for Black)."""
+        self._player_num = player_num
+        logging.debug(f"ClientRenderer set to player {player_num}")
+
+    def handle_assign_player(self, event_payload: Dict[str, Any]) -> None:
+        """Handle ASSIGN_PLAYER event to set the current player."""
+        player_color = event_payload.get("player", "W")
+        player_num = 1 if player_color == "W" else 2
+        self.set_player_num(player_num)
 
     def _sprite(self, type_name: str) -> Graphics:
         g = self._cache.get(type_name)
@@ -102,14 +115,9 @@ class ClientRenderer:
             logging.debug(f"Drawing piece {pid} at cell ({row}, {col}) -> pixel ({sprite_x}, {sprite_y})")
             sprite.draw_on(canvas, sprite_x, sprite_y)
 
-        # Draw player cursors (selection indicators)
-        cursors = payload.get("cursors", [])
-        for cursor in cursors:
-            player = cursor.get("player")
-            cursor_cell = cursor.get("cell")
-            if cursor_cell is None:
-                continue
-                
+        # Draw local player cursor (selection indicator)
+        if self._keyboard_processor is not None:
+            cursor_cell = self._keyboard_processor.get_cursor()
             row, col = cursor_cell[0], cursor_cell[1]
             
             # Calculate cursor position
@@ -123,12 +131,12 @@ class ClientRenderer:
             y2 = y1 + 64 - 1
             
             # Player 1 = Green, Player 2 = Red (BGR format)
-            color = (0, 255, 0) if player == 1 else (0, 0, 255)
+            color = (0, 255, 0) if self._player_num == 1 else (0, 0, 255)
             
             # Draw cursor rectangle using OpenCV directly on the numpy array
             import cv2
             cv2.rectangle(canvas.img, (x1, y1), (x2, y2), color, 3)
-            logging.debug(f"Drawing cursor for player {player} at cell ({row}, {col}) -> rect ({x1}, {y1}) to ({x2}, {y2})")
+            logging.debug(f"Drawing local cursor for player {self._player_num} at cell ({row}, {col}) -> rect ({x1}, {y1}) to ({x2}, {y2})")
 
         self._board.img = canvas
 

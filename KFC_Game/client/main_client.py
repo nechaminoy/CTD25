@@ -6,9 +6,9 @@ import logging
 from pathlib import Path
 
 # Import shared components
-from shared.game_factory import GameFactory
-from shared.graphics_factory import ImgFactory
-from shared.config import PIECES_DIR, DEFAULT_HOST, DEFAULT_PORT
+from ..shared.game_factory import GameFactory
+from ..shared.graphics_factory import ImgFactory
+from ..shared.config import PIECES_DIR, DEFAULT_HOST, DEFAULT_PORT
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,8 @@ async def run_client(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, player:
         subscribe_state_sync(game.bus, board_mirror)
         
         # Setup renderer and display
-        renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory())
+        player_num = 1 if player == "W" else 2
+        renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory(), player_num=player_num)
         subscribe_render(game.bus, renderer)
         
         display = Cv2Display("Kung Fu Chess")
@@ -60,7 +61,7 @@ async def run_client(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, player:
         render_loop.start()
         
         # Setup input handling
-        input_handler = setup_input_handling(game, ws_client, player)
+        input_handler = setup_input_handling(game, ws_client, player, board_mirror)
         input_handler.start()
         
         # Main client loop

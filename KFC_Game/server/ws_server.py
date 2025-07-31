@@ -16,6 +16,7 @@ class WSHub:
         self._loop = loop
         self._game = game
         self._players = {}  # ws -> "W"/"B"
+        self._player_cursors = {}  # player -> (row, col)
         for et in EventType:
             self._bus.subscribe(et, self._on_event)
 
@@ -65,6 +66,16 @@ class WSHub:
                     ok = True
                     reason = None
 
+                    # Handle cursor update commands specially
+                    if cmd.type == "cursor_update":
+                        player_num = cmd.params[0]
+                        cursor_pos = cmd.params[1]
+                        player_color = self._players.get(ws)
+                        if player_color:
+                            self._player_cursors[player_color] = cursor_pos
+                            logging.debug(f"Updated cursor for player {player_color} to {cursor_pos}")
+                        continue
+
                     try:
                         player_color = self._players.get(ws)
                         if player_color:
@@ -100,7 +111,20 @@ class WSHub:
             self._players.pop(ws, None)
 
     def _snapshot(self) -> dict:
-        return self._game.snapshot()
+        # Get the base snapshot from the game
+        snapshot = self._game.snapshot()
+        
+        # Add client cursors to the snapshot
+        cursors = []
+        for player_color, cursor_pos in self._player_cursors.items():
+            player_num = 1 if player_color == "W" else 2
+            cursors.append({"player": player_num, "cell": cursor_pos})
+        
+        # If there are client cursors, use them, otherwise fall back to game's local cursors
+        if cursors:
+            snapshot["cursors"] = cursors
+        
+        return snapshot
 
 
 async def serve(game, host="127.0.0.1", port=8765):

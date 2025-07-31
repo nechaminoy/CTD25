@@ -1,4 +1,4 @@
-import os, asyncio, logging
+import os, asyncio, logging, argparse
 from pathlib import Path
 from .server.game_factory import create_game
 from .graphics.graphics_factory import ImgFactory, MockImgFactory
@@ -13,12 +13,20 @@ async def run_local():
     game = create_game(PIECES_DIR, ImgFactory())
     game.run()
 
-async def run_server():
+async def run_server(host=None, port=None):
     from .server.ws_server import serve_and_tick
     game = create_game(PIECES_DIR, ImgFactory())
-    await serve_and_tick(game, host=WS_HOST, port=WS_PORT)
+    
+    # Use provided arguments or fall back to config/environment
+    server_host = host or WS_HOST
+    server_port = port or WS_PORT
+    
+    print(f"Starting KFC Game Server on {server_host}:{server_port}")
+    print(f"Clients can connect to: ws://{server_host}:{server_port}")
+    
+    await serve_and_tick(game, host=server_host, port=server_port)
 
-async def run_client():
+async def run_client(host=None, port=None):
     from .client.ws_client import WSClient
     from .client.event_bridge import EventBridge
     from .input.keyboard_input import KeyboardProducer, KeyboardProcessor
@@ -28,8 +36,15 @@ async def run_client():
     
     logging.debug("Game created successfully with all pieces")
     
+    # Use provided arguments or fall back to config/environment
+    server_host = host or WS_HOST
+    server_port = port or WS_PORT
+    ws_uri = f"ws://{server_host}:{server_port}"
+    
     player = os.getenv("PLAYER", "W")
-    ws = await WSClient(WS_URI).connect(player=player)
+    print(f"Connecting to server at {ws_uri} as player {player}")
+    
+    ws = await WSClient(ws_uri).connect(player=player)
 
     class _ToWSQueue:
         def __init__(self, ws_client, loop):
@@ -43,13 +58,14 @@ async def run_client():
     player_num = 1 if player == "W" else 2
     keymap = P1_MAP if player_num == 1 else P2_MAP
     kp = KeyboardProcessor(8, 8, keymap)
-    kb = KeyboardProducer(game, _ToWSQueue(ws, asyncio.get_event_loop()), kp, player=player_num)
-    kb.start()
-
+    
     EventBridge(ws, game.bus).start()
     
     mirror = BoardMirror()
     subscribe_state_sync(game.bus, mirror)
+    
+    kb = KeyboardProducer(game, _ToWSQueue(ws, asyncio.get_event_loop()), kp, player=player_num, board_mirror=mirror)
+    kb.start()
     
     renderer = ClientRenderer(game.board, PIECES_DIR, ImgFactory())
     subscribe_render(game.bus, renderer)
@@ -70,13 +86,43 @@ async def run_client():
         display.close()
 
 async def main():
-    logging.basicConfig(level=logging.DEBUG,
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='KFC Game - Kung Fu Chess')
+    parser.add_argument('--mode', choices=['local', 'server', 'client'], 
+                       default=os.getenv("KFC_MODE", "local").lower(),
+                       help='Game mode (default: local, or from KFC_MODE env var)')
+    parser.add_argument('--host', type=str, 
+                       default=None,
+                       help=f'Server host address (default: {WS_HOST}, or from KFC_HOST env var)')
+    parser.add_argument('--port', type=int, 
+                       default=None,
+                       help=f'Server port (default: {WS_PORT}, or from KFC_PORT env var)')
+    parser.add_argument('--player', choices=['W', 'B'], 
+                       default=os.getenv("PLAYER", "W"),
+                       help='Player color for client mode (default: W, or from PLAYER env var)')
+    parser.add_argument('--verbose', '-v', action='store_true',
+                       help='Enable verbose logging')
+    
+    args = parser.parse_args()
+    
+    # Configure logging
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    mode = os.getenv("KFC_MODE", "local").lower()
-    if mode == "local":  await run_local()
-    elif mode == "server": await run_server()
-    elif mode == "client": await run_client()
-    else: raise SystemExit(f"Unknown KFC_MODE={mode}")
+    
+    # Set player environment for client mode
+    if args.mode == 'client':
+        os.environ['PLAYER'] = args.player
+    
+    # Run the appropriate mode
+    if args.mode == "local":  
+        await run_local()
+    elif args.mode == "server": 
+        await run_server(host=args.host, port=args.port)
+    elif args.mode == "client": 
+        await run_client(host=args.host, port=args.port)
+    else: 
+        raise SystemExit(f"Unknown mode: {args.mode}")
 
 if __name__ == "__main__":
     asyncio.run(main())

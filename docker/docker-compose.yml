@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  kfc-server:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "${HOST_PORT:-8765}:${KFC_PORT:-8765}"
+    environment:
+      - KFC_HEADLESS=1
+      - PYTHONPATH=/app
+      - KFC_HOST=${KFC_HOST:-0.0.0.0}
+      - KFC_PORT=${KFC_PORT:-8765}
+    volumes:
+      # Mount pieces directory if needed
+      - ../pieces:/app/pieces:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; import os; s=socket.socket(); s.connect(('localhost', int(os.getenv('KFC_PORT', '8765')))); s.close()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    command: ["python", "docker/docker_server.py"]
+
+  # Optional: Add a client service for testing
+  kfc-client-white:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - KFC_HEADLESS=1
+      - PLAYER=W
+      - PYTHONPATH=/app
+    depends_on:
+      - kfc-server
+    volumes:
+      - ../pieces:/app/pieces:ro
+    command: ["python", "-c", "import asyncio; from KFC_Game.main import run_client; asyncio.run(run_client())"]
+    profiles: ["client"]  # Only start with --profile client
+
+  kfc-client-black:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - KFC_HEADLESS=1
+      - PLAYER=B
+      - PYTHONPATH=/app
+    depends_on:
+      - kfc-server
+    volumes:
+      - ../pieces:/app/pieces:ro
+    command: ["python", "-c", "import asyncio; from KFC_Game.main import run_client; asyncio.run(run_client())"]
+    profiles: ["client"]  # Only start with --profile client
