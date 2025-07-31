@@ -105,8 +105,8 @@ async def main():
     
     args = parser.parse_args()
     
-    # Configure logging
-    log_level = logging.DEBUG if args.verbose else logging.INFO
+    # Configure logging - DEBUG level shows both DEBUG and INFO messages
+    log_level = logging.DEBUG  # Always use DEBUG to see all messages
     logging.basicConfig(level=log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     

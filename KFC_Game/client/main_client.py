@@ -6,12 +6,14 @@ import logging
 from pathlib import Path
 
 # Import shared components
-from ..shared.game_factory import GameFactory
-from ..shared.graphics_factory import ImgFactory
-from ..shared.config import PIECES_DIR, DEFAULT_HOST, DEFAULT_PORT
+from ..server.game_factory import create_game
+from ..graphics.graphics_factory import ImgFactory
+from ..config.settings import PIECES_DIR, WS_HOST, WS_PORT
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_HOST = WS_HOST or "localhost"
+DEFAULT_PORT = WS_PORT or 8765
 
 async def run_client(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, player: str = "W"):
     """
@@ -25,9 +27,8 @@ async def run_client(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT, player:
     logger.info(f"Starting KFC client, connecting to {host}:{port} as player {player}")
     
     try:
-        # Create game instance for client
-        game_factory = GameFactory(PIECES_DIR, ImgFactory())
-        game = game_factory.create_client_game()
+        # Create game instance for client - this will properly subscribe to all events including move_history
+        game = create_game(PIECES_DIR, ImgFactory())
         
         # Import client-specific modules
         from .ws_client import WSClient
